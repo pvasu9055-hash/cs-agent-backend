@@ -55,7 +55,6 @@ public class ChatService {
         List<Message> existingMessages = new ArrayList<>();
 
         if (request.getSessionId() == null) {
-            // Create new session with auto title from first message
             String title = generateTitle(request.getMessage());
             session = ChatSession.builder()
                     .title(title)
@@ -65,10 +64,9 @@ public class ChatService {
         } else {
             session = sessionRepository.findByIdAndUserId(request.getSessionId(), userId)
                     .orElseThrow(() -> new RuntimeException("Session not found"));
-            existingMessages = messageRepository.findBySessionIdOrderByCreatedAtAsc(session.getId());
+            existingMessages = messageRepository.findByChatSessionIdOrderByCreatedAtAsc(session.getId());
         }
 
-        // Save user message
         Message userMessage = Message.builder()
                 .role("user")
                 .content(request.getMessage())
@@ -76,17 +74,14 @@ public class ChatService {
                 .build();
         userMessage = messageRepository.save(userMessage);
 
-        // Build conversation history for Groq
         List<Map<String, String>> history = new ArrayList<>();
         for (Message msg : existingMessages) {
             history.add(Map.of("role", msg.getRole(), "content", msg.getContent()));
         }
         history.add(Map.of("role", "user", "content", request.getMessage()));
 
-        // Get AI response
         String aiResponse = groqService.getAIResponse(history);
 
-        // Save assistant message
         Message assistantMessage = Message.builder()
                 .role("assistant")
                 .content(aiResponse)
@@ -94,7 +89,6 @@ public class ChatService {
                 .build();
         assistantMessage = messageRepository.save(assistantMessage);
 
-        // Update session timestamp
         sessionRepository.save(session);
 
         return new ChatDto.SendMessageResponse(
